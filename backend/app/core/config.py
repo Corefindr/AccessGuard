@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8472
     cors_origins: str = "http://127.0.0.1:43123,http://localhost:43123"
+    database_url: str = "sqlite:///./accessguard.db"
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -25,7 +25,7 @@ Spreadsheet tracking does not scale across applications, owners, and managers.
 - Compliance reporting
 - Optional integrations (email, Microsoft Teams, ServiceNow)
 
-These capabilities are **not implemented yet**. This repository currently contains the project foundation only.
+CRUD APIs, dashboards, reminder engines, and integrations are **not implemented yet**.
 
 ## Technology stack
 
@@ -41,14 +41,16 @@ These capabilities are **not implemented yet**. This repository currently contai
 
 - Python
 - FastAPI
-- Pydantic
+- Pydantic v2
+- SQLAlchemy 2.x
+- Alembic
 
-### Database (later)
+### Database
 
-- SQLite initially
+- SQLite for local development (`DATABASE_URL` in `.env`)
 - PostgreSQL may be used later
 
-SQLAlchemy models, persistence, and compliance logic are deferred to a later phase.
+Schema changes are applied only through Alembic migrations. The API does not call `create_all()` on startup.
 
 ## Project structure
 
@@ -57,12 +59,20 @@ SQLAlchemy models, persistence, and compliance logic are deferred to a later pha
 ├── README.md
 ├── .gitignore
 ├── backend/
+│   ├── alembic.ini
+│   ├── alembic/
+│   │   ├── env.py
+│   │   └── versions/          # migration scripts
 │   ├── app/
-│   │   ├── api/            # HTTP routers
-│   │   ├── core/           # settings and shared configuration
-│   │   ├── models/         # reserved for future SQLAlchemy models
-│   │   ├── schemas/        # reserved for future Pydantic schemas
-│   │   └── services/       # reserved for future business logic
+│   │   ├── api/               # HTTP routers (health only in Phase 1–2)
+│   │   ├── core/              # settings and enums
+│   │   ├── database/          # engine, session, declarative base
+│   │   ├── models/            # SQLAlchemy models
+│   │   ├── schemas/           # Pydantic schemas for future APIs
+│   │   └── services/          # reserved for future business logic
+│   ├── scripts/
+│   │   └── seed.py            # optional development demo data
+│   ├── tests/
 │   ├── requirements.txt
 │   ├── run.py
 │   └── .env.example
@@ -93,6 +103,39 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+```
+
+`.env` should include a SQLite URL, for example:
+
+```env
+DATABASE_URL=sqlite:///./accessguard.db
+```
+
+The SQLite file is created relative to the working directory you start the backend from (normally `backend/`).
+
+### Create the local database (Alembic)
+
+From `backend/` with the virtualenv active:
+
+```bash
+alembic upgrade head
+```
+
+This creates `accessguard.db` (gitignored) and the four core tables. Do not create tables by calling `Base.metadata.create_all()`.
+
+### Optional seed data
+
+The seed script is for local development only. It does **not** run when the API starts.
+
+```bash
+python scripts/seed.py
+```
+
+It inserts five fictional users, four applications (ServiceNow, CyberArk, Microsoft 365, Mainframe Access), access records, and one sample reminder-history row. Re-running it is idempotent for those demo keys.
+
+### Start the API
+
+```bash
 python run.py
 ```
 
@@ -107,6 +150,18 @@ Expected response:
 ```json
 {"status":"ok","application":"AccessGuard"}
 ```
+
+`GET /api/health` does not require rows in the database.
+
+### Backend tests
+
+```bash
+cd backend
+source .venv/bin/activate
+pytest
+```
+
+Tests run Alembic against a temporary SQLite file. They do not use your development `accessguard.db`.
 
 ### Frontend
 
@@ -123,31 +178,40 @@ The UI is served at [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
 `VITE_API_BASE_URL` in `frontend/.env` must point at the FastAPI origin (default `http://127.0.0.1:8472`). CORS on the backend is configured for the Vite dev origin.
 
+The landing page is unchanged in Phase 2: it still shows **Backend Status: Connected / Disconnected**.
+
 ## Current status
 
-**Phase 1 – Foundation**
-
-Shipped:
+### Phase 1 – Foundation (complete)
 
 - Frontend and backend project layout
 - FastAPI application with CORS for local development
 - `GET /api/health`
 - Landing page that reports backend **Connected** / **Disconnected**
 
+### Phase 2 – Database & core data model (complete)
+
+- SQLAlchemy 2.x models: User, Application, AccessRecord, ReminderHistory
+- SQLite via `DATABASE_URL`
+- Alembic initial migration
+- Pydantic Base / Create / Read schemas (no CRUD routes yet)
+- Optional development seed script
+- Lightweight persistence tests
+
 Not started:
 
 - Authentication
-- Database tables and SQLAlchemy models
-- CRUD
+- CRUD API routes and inventory UI
 - Dashboard
 - CSV import
+- Compliance calculation (status remains stored; default `UNKNOWN`)
 - Reminder / escalation engines
 - ServiceNow, Microsoft Teams, email, or AI features
 
 ## Roadmap
 
-1. **Phase 1 – Foundation** (current): project structure, health check, landing page
-2. **Phase 2 – Data model**: SQLite, SQLAlchemy entities (User, Application, AccessRecord, ReminderHistory)
+1. **Phase 1 – Foundation** (complete): project structure, health check, landing page
+2. **Phase 2 – Data model** (complete): SQLite, SQLAlchemy entities, Alembic, seed data
 3. **Phase 3 – Access inventory**: CRUD and basic list/detail views
 4. **Phase 4 – Compliance**: dormancy/expiry evaluation and GREEN / AMBER / RED / UNKNOWN status
 5. **Phase 5 – Operations**: reminders, escalations, and reporting
