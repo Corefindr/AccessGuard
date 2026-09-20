@@ -25,7 +25,7 @@ Spreadsheet tracking does not scale across applications, owners, and managers.
 - Compliance reporting
 - Optional integrations (email, Microsoft Teams, ServiceNow)
 
-CRUD APIs, dashboards, reminder engines, and integrations are **not implemented yet**.
+CRUD dashboards, reminder engines, and integrations are **not implemented yet**. User and Application HTTP APIs are available.
 
 ## Technology stack
 
@@ -64,12 +64,12 @@ Schema changes are applied only through Alembic migrations. The API does not cal
 │   │   ├── env.py
 │   │   └── versions/          # migration scripts
 │   ├── app/
-│   │   ├── api/               # HTTP routers (health only in Phase 1–2)
-│   │   ├── core/              # settings and enums
+│   │   ├── api/               # HTTP routers (health, users, applications)
+│   │   ├── core/              # settings, enums, domain exceptions
 │   │   ├── database/          # engine, session, declarative base
 │   │   ├── models/            # SQLAlchemy models
-│   │   ├── schemas/           # Pydantic schemas for future APIs
-│   │   └── services/          # reserved for future business logic
+│   │   ├── schemas/           # Pydantic request/response schemas
+│   │   └── services/          # user and application CRUD services
 │   ├── scripts/
 │   │   └── seed.py            # optional development demo data
 │   ├── tests/
@@ -178,7 +178,58 @@ The UI is served at [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
 `VITE_API_BASE_URL` in `frontend/.env` must point at the FastAPI origin (default `http://127.0.0.1:8472`). CORS on the backend is configured for the Vite dev origin.
 
-The landing page is unchanged in Phase 2: it still shows **Backend Status: Connected / Disconnected**.
+The landing page is unchanged in Phase 3: it still shows **Backend Status: Connected / Disconnected**. There are no User or Application management screens yet.
+
+### User and Application APIs
+
+Interactive docs: [http://127.0.0.1:8472/docs](http://127.0.0.1:8472/docs) (Swagger UI) and [http://127.0.0.1:8472/redoc](http://127.0.0.1:8472/redoc).
+
+`DELETE` on users and applications is a **soft delete**: the row stays in SQLite and `active` is set to `false`.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/users` | Query: `active`, `team`, `search`, `skip`, `limit` |
+| GET | `/api/users/{user_id}` | 404 if missing |
+| POST | `/api/users` | 201 created; 409 on duplicate `employee_id` or `email` |
+| PUT | `/api/users/{user_id}` | Full replace |
+| PATCH | `/api/users/{user_id}` | Partial update |
+| DELETE | `/api/users/{user_id}` | Soft delete (`active=false`) |
+| GET | `/api/applications` | Query: `active`, `criticality`, `search`, `skip`, `limit` |
+| GET | `/api/applications/{application_id}` | 404 if missing |
+| POST | `/api/applications` | 201 created; 409 on duplicate `name` |
+| PUT | `/api/applications/{application_id}` | Full replace |
+| PATCH | `/api/applications/{application_id}` | Partial update |
+| DELETE | `/api/applications/{application_id}` | Soft delete (`active=false`) |
+
+List pagination: `skip` defaults to `0`, `limit` defaults to `50`, maximum `limit` is `200`.
+
+Example requests:
+
+```bash
+curl http://127.0.0.1:8472/api/users
+curl "http://127.0.0.1:8472/api/users?active=true&team=Service%20Desk"
+curl "http://127.0.0.1:8472/api/users?search=nishant&skip=0&limit=25"
+
+curl -X POST http://127.0.0.1:8472/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id":"EMP001","name":"Alex Morgan","email":"alex.morgan@example.com","team":"Service Desk"}'
+
+curl -X PATCH http://127.0.0.1:8472/api/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"team":"Identity Operations"}'
+
+curl -X DELETE http://127.0.0.1:8472/api/users/1
+
+curl http://127.0.0.1:8472/api/applications
+curl "http://127.0.0.1:8472/api/applications?criticality=HIGH&active=true"
+
+curl -X POST http://127.0.0.1:8472/api/applications \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ServiceNow","criticality":"HIGH","dormancy_threshold_days":45,"reminder_before_days":14}'
+```
+
+AccessRecord and ReminderHistory APIs are not implemented yet.
+
 
 ## Current status
 
@@ -194,15 +245,23 @@ The landing page is unchanged in Phase 2: it still shows **Backend Status: Conne
 - SQLAlchemy 2.x models: User, Application, AccessRecord, ReminderHistory
 - SQLite via `DATABASE_URL`
 - Alembic initial migration
-- Pydantic Base / Create / Read schemas (no CRUD routes yet)
+- Pydantic Base / Create / Replace / Update / Read schemas
 - Optional development seed script
 - Lightweight persistence tests
+
+### Phase 3 – User & Application CRUD APIs (complete)
+
+- REST APIs for users and applications
+- Filtering, search, and offset pagination
+- Duplicate handling with HTTP 409
+- Soft delete (`active=false`)
+- Swagger UI at `/docs`
 
 Not started:
 
 - Authentication
-- CRUD API routes and inventory UI
-- Dashboard
+- AccessRecord / ReminderHistory APIs
+- Inventory UI and dashboards
 - CSV import
 - Compliance calculation (status remains stored; default `UNKNOWN`)
 - Reminder / escalation engines
@@ -212,10 +271,11 @@ Not started:
 
 1. **Phase 1 – Foundation** (complete): project structure, health check, landing page
 2. **Phase 2 – Data model** (complete): SQLite, SQLAlchemy entities, Alembic, seed data
-3. **Phase 3 – Access inventory**: CRUD and basic list/detail views
-4. **Phase 4 – Compliance**: dormancy/expiry evaluation and GREEN / AMBER / RED / UNKNOWN status
-5. **Phase 5 – Operations**: reminders, escalations, and reporting
-6. **Phase 6 – Integrations**: email, Teams, ServiceNow (as needed)
+3. **Phase 3 – User & Application APIs** (complete): CRUD, filters, soft delete
+4. **Phase 4 – Access inventory**: AccessRecord APIs and management UI
+5. **Phase 5 – Compliance**: dormancy/expiry evaluation and GREEN / AMBER / RED / UNKNOWN status
+6. **Phase 6 – Operations**: reminders, escalations, and reporting
+7. **Phase 7 – Integrations**: email, Teams, ServiceNow (as needed)
 
 ## License
 
